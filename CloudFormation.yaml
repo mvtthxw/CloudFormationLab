@@ -1,0 +1,300 @@
+﻿#Paramteres for the environment 
+Parameters:
+  Env: 
+    Description: Environment variable
+    Type: String
+    Default: "dev" 
+    AllowedValues: ["dev", "test", "prod"]
+
+  VpcCidr: 
+    Description: Cidr for vpc
+    Type: String
+    Default: "10.0.0.0/21"
+
+  Igw: 
+    Description: Create IGW?
+    Type: String
+    Default: "yes" 
+    AllowedValues: ["yes", "no"]
+
+  Nat: 
+    Description: Create NAT?
+    Type: String
+    Default: "yes" 
+    AllowedValues: ["yes", "no"]  
+
+#Conditions
+Conditions:
+  CreateIgw: !Equals [!Ref Igw, "yes"]
+  CreateNatYes: !Equals [!Ref Nat, "yes"]
+  CreateNatNo: !Equals [!Ref Nat, "no"]  
+
+#Resources for the environment
+#1 Create VPC
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags: 
+        - Key: Name
+          Value: !Sub ${Env}_VPC
+
+#2 Create Subnets
+  PublicA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Select [ 1, !Cidr [!GetAtt Vpc.CidrBlock, 8, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_Pub_A
+
+  PublicB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Select [ 2, !Cidr [!GetAtt Vpc.CidrBlock, 8, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_Pub_B
+
+  PublicC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Select [ 3, !Cidr [!GetAtt Vpc.CidrBlock, 8, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_Pub_C
+
+  PrivateA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Select [ 4, !Cidr [!GetAtt Vpc.CidrBlock, 8, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_Priv_A
+
+  PrivateB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Select [ 5, !Cidr [!GetAtt Vpc.CidrBlock, 8, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_Priv_B
+
+  PrivateC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Select [ 6, !Cidr [!GetAtt Vpc.CidrBlock, 8, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_Priv_C
+
+#3 Create Internet Gateway and connect to the VPC 
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateIgw
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_IGW
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateIgw
+    Properties:       
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+#4 Create Public RT and forward public trafic to the Internet 
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateIgw
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_RT
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Condition: CreateIgw
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+#5 Associate public subnets to public RT
+  AssociationPublicA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicA
+
+  AssociationPublicB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicB
+
+  AssociationPublicC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicC
+
+#6 Allocate IP for NAT
+  NatGatewayAEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Condition: CreateNatYes
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_NAT_IP_A
+
+  NatGatewayBEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Condition: CreateNatYes
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_NAT_IP_B
+
+  NatGatewayCEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Condition: CreateNatYes
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_NAT_IP_C
+
+#7 Create NAT and connect to EIP
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNatYes
+    Properties:
+      AllocationId: !GetAtt NatGatewayAEIP.AllocationId
+      SubnetId: !Ref PublicA
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_NAT_A
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNatYes
+    Properties:
+      AllocationId: !GetAtt NatGatewayBEIP.AllocationId
+      SubnetId: !Ref PublicB
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_NAT_B
+
+  NatGatewayC:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNatYes
+    Properties:
+      AllocationId: !GetAtt NatGatewayCEIP.AllocationId
+      SubnetId: !Ref PublicC
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_NAT_C
+
+#8 Create RTs, forward trafic and assosiate with subnets in private
+#Subnet A
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_priv_A_RT
+
+  DefaultPrivateRouteA:
+    Type: AWS::EC2::Route
+    Condition: CreateNatYes
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  AssociationPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNatYes
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateA
+
+#Subnet B 
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_priv_B_RT
+
+  DefaultPrivateRouteB:
+    Type: AWS::EC2::Route
+    Condition: CreateNatYes
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+
+  AssociationPrivateB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNatYes
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateB
+
+#Subnet C 
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${Env}_priv_C_RT
+
+  DefaultPrivateRouteC:
+    Type: AWS::EC2::Route
+    Condition: CreateNatYes
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayC
+
+  AssociationPrivateC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNatYes
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref PrivateC
+
