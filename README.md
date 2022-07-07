@@ -10,8 +10,7 @@ Resources:
 Paramentes:
 -Env
 -CIDR
--NAT y/n
--IGW y/n
+
 
 2. S3 bucket
 -versioning
@@ -22,3 +21,8 @@ Paramentes:
 -EC2 role - permission to download file from S3 only
 -security group
 -encrypted volume
+
+
+
+Useful link for Session Manager:
+https://aws.amazon.com/blogs/mt/automated-configuration-of-session-manager-without-an-internet-gateway/ 
