@@ -26,8 +26,7 @@ Parameters:
 #Conditions
 Conditions:
   CreateIgw: !Equals [!Ref Igw, "yes"]
-  CreateNatYes: !Equals [!Ref Nat, "yes"]
-  CreateNatNo: !Equals [!Ref Nat, "no"]  
+  CreateNat: !Equals [!Ref Nat, "yes"]
 
 #Resources for the environment
 #1 Create VPC
@@ -128,7 +127,6 @@ Resources:
 #4 Create Public RT and forward public trafic to the Internet 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
-    Condition: CreateIgw
     Properties:
       VpcId: !Ref Vpc
       Tags:
@@ -167,7 +165,7 @@ Resources:
   NatGatewayAEIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       Domain: vpc
       Tags:
@@ -177,7 +175,7 @@ Resources:
   NatGatewayBEIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       Domain: vpc
       Tags:
@@ -187,7 +185,7 @@ Resources:
   NatGatewayCEIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       Domain: vpc
       Tags:
@@ -197,7 +195,7 @@ Resources:
 #7 Create NAT and connect to EIP
   NatGatewayA:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       AllocationId: !GetAtt NatGatewayAEIP.AllocationId
       SubnetId: !Ref PublicA
@@ -207,7 +205,7 @@ Resources:
 
   NatGatewayB:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       AllocationId: !GetAtt NatGatewayBEIP.AllocationId
       SubnetId: !Ref PublicB
@@ -217,7 +215,7 @@ Resources:
 
   NatGatewayC:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       AllocationId: !GetAtt NatGatewayCEIP.AllocationId
       SubnetId: !Ref PublicC
@@ -237,7 +235,7 @@ Resources:
 
   DefaultPrivateRouteA:
     Type: AWS::EC2::Route
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       RouteTableId: !Ref PrivateRouteTableA
       DestinationCidrBlock: 0.0.0.0/0
@@ -245,7 +243,6 @@ Resources:
 
   AssociationPrivateA:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreateNatYes
     Properties:
       RouteTableId: !Ref PrivateRouteTableA
       SubnetId: !Ref PrivateA
@@ -261,7 +258,7 @@ Resources:
 
   DefaultPrivateRouteB:
     Type: AWS::EC2::Route
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
@@ -269,7 +266,6 @@ Resources:
 
   AssociationPrivateB:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreateNatYes
     Properties:
       RouteTableId: !Ref PrivateRouteTableB
       SubnetId: !Ref PrivateB
@@ -285,7 +281,7 @@ Resources:
 
   DefaultPrivateRouteC:
     Type: AWS::EC2::Route
-    Condition: CreateNatYes
+    Condition: CreateNat
     Properties:
       RouteTableId: !Ref PrivateRouteTableC
       DestinationCidrBlock: 0.0.0.0/0
@@ -293,8 +289,48 @@ Resources:
 
   AssociationPrivateC:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreateNatYes
     Properties:
       RouteTableId: !Ref PrivateRouteTableC
       SubnetId: !Ref PrivateC
 
+
+#9 Security groups
+  PrivateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: General usage in the private subnet
+      GroupName: PrivateSecurityGroup
+      SecurityGroupEgress: 
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: 
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref VpcCidr
+      Tags: 
+        - Key: Name
+          Value: !Sub ${Env}_private_SG
+      VpcId: !Ref Vpc
+
+  PublicSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: General usage in the public subnet
+      GroupName: PublicSecurityGroup
+      SecurityGroupEgress: 
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress: 
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref VpcCidr
+      Tags: 
+        - Key: Name
+          Value: !Sub ${Env}_public_SG
+      VpcId: !Ref Vpc
