@@ -1,16 +1,16 @@
 AWS VPC
 
-Resources:
-1. VPC
--3 AZ
--Public and private subnets
--NAT, IGW, RTs
--Public and private SG, for public edit inbound address
-
 Paramentes:
 -Env
 -CIDR
 
+Resources:
+1. VPC
+-3 AZ
+-Public and private subnets
+-RTs
+-Public, private and SessionMaganer SG
+-Without NAT and IGW
 
 2. S3 bucket
 -versioning
@@ -18,9 +18,10 @@ Paramentes:
 
 3. EC2
 -amazon linux 2
--EC2 role - permission to download file from S3 only
+-EC2 role - permission for Session Manager and download file from S3 only 
 -security group
 -encrypted volume
+-VPC Endpoints for Session Manager
 
 
 
